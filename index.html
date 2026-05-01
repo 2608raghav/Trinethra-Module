@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Trinethra Analyzer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-100 p-8">
+    <div class="max-w-5xl mx-auto grid grid-cols-2 gap-6">
+        <!-- Input Section -->
+        <div class="bg-white p-6 rounded-lg shadow">
+            <h2 class="font-bold mb-4">1. Paste Transcript</h2>
+            <textarea id="inp" class="w-full h-80 border p-2 text-sm" placeholder="Paste supervisor call here..."></textarea>
+            <button onclick="analyze()" id="btn" class="w-full bg-blue-600 text-white p-3 mt-4 rounded font-bold">Run AI Analysis</button>
+        </div>
+
+        <!-- Output Section -->
+        <div id="out" class="bg-white p-6 rounded-lg shadow hidden overflow-y-auto h-[550px]">
+            <h2 class="font-bold mb-4 border-b pb-2">2. Suggested Assessment</h2>
+            <div id="score" class="text-xl font-bold text-blue-700"></div>
+            <p id="just" class="text-sm my-3 italic"></p>
+            
+            <h3 class="font-bold mt-4 text-sm text-gray-500 uppercase">Extracted Evidence</h3>
+            <div id="ev" class="space-y-2 mt-2"></div>
+
+            <h3 class="font-bold mt-6 text-sm text-gray-500 uppercase">Gaps & Follow-ups</h3>
+            <div id="gaps" class="space-y-2 mt-2 text-xs text-red-600"></div>
+        </div>
+    </div>
+
+    <script>
+        async function analyze() {
+            const btn = document.getElementById('btn');
+            const outputDiv = document.getElementById('out');
+            
+            btn.innerText = "Analyzing with Ollama...";
+            btn.disabled = true;
+
+            try {
+                const res = await fetch('http://localhost:3000/analyze', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ transcript: document.getElementById('inp').value })
+                });
+
+                const data = await res.json();
+                
+                // Show output area
+                outputDiv.classList.remove('hidden');
+
+                // 1. Update Score and Justification
+                document.getElementById('score').innerText = `Score: ${data.score || 'N/A'} (${data.label || 'No Label'})`;
+                document.getElementById('just').innerText = data.justification || 'No justification provided.';
+
+                // 2. Update Evidence (Using fallback keys to avoid "undefined")
+                const evContainer = document.getElementById('ev');
+                if (data.evidence && Array.isArray(data.evidence)) {
+                    evContainer.innerHTML = data.evidence.map(e => `
+                        <div class="p-3 bg-slate-50 border-l-4 border-blue-400 text-xs">
+                            <p class="italic">"${e.quote || e.text || 'No quote extracted'}"</p>
+                            <div class="mt-2 flex justify-between font-bold text-blue-900">
+                                <span>${(e.dimension || e.category || 'General').toUpperCase()}</span>
+                                <span class="text-[10px] bg-blue-100 px-1 rounded">${(e.signal || 'Neutral').toUpperCase()}</span>
+                            </div>
+                        </div>
+                    `).join('');
+                } else {
+                    evContainer.innerHTML = "<p class='text-xs text-gray-400'>No evidence found.</p>";
+                }
+
+                // 3. Update Gaps (Requirement 4 of Part A)
+                const gapContainer = document.getElementById('gaps');
+                if (data.gaps && Array.isArray(data.gaps)) {
+                    gapContainer.innerHTML = data.gaps.map(g => `
+                        <div class="p-2 bg-red-50 border rounded">• ${g}</div>
+                    `).join('');
+                } else {
+                    gapContainer.innerHTML = "<p class='text-xs text-gray-400'>No gaps found.</p>";
+                }
+
+            } catch (error) {
+                alert("Error connecting to backend. Make sure your node server is running.");
+            } finally {
+                btn.innerText = "Run AI Analysis";
+                btn.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>
